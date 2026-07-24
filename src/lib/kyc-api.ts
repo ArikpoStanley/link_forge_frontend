@@ -1,0 +1,187 @@
+import dns from "node:dns";
+import type { CheckSelection, GenerateLinkRequest } from "./types";
+
+// Prefer IPv4 — Fly hosts advertise AAAA; some networks fail undici on IPv6 ("fetch failed")
+try {
+  dns.setDefaultResultOrder("ipv4first");
+} catch {
+  // Node < 17
+}
+
+function extractErrorMessage(body: unknown, fallback: string) {
+  if (!body || typeof body !== "object") return fallback;
+  const record = body as Record<string, unknown>;
+  if (typeof record.message === "string" && record.message.trim()) {
+    return record.message;
+  }
+  if (typeof record.error === "string" && record.error.trim()) {
+    return record.error;
+  }
+  const errors = record.errors;
+  if (Array.isArray(errors) && errors.length > 0) {
+    const first = errors[0] as Record<string, unknown>;
+    const msg = first?.msg || first?.message;
+    if (typeof msg === "string" && msg.trim()) return msg;
+  }
+  if (errors && typeof errors === "object") {
+    const values = Object.values(errors as Record<string, unknown>);
+    const first = values[0];
+    if (typeof first === "string" && first.trim()) return first;
+  }
+  return fallback;
+}
+
+export function buildIndividualChecks(checks: CheckSelection) {
+  return {
+    bio: checks.bio,
+    document_verification: checks.document_verification,
+    disclaimer: checks.disclaimer,
+    address_verification: checks.address_verification
+      ? { enabled: true, upload_proof_of_address: true }
+      : undefined,
+    verification_types: {
+      phone: checks.phone,
+      email: checks.email,
+      nin: checks.nin,
+      bvn: checks.bvn,
+      // Prod Joi allows liveliness here (not as a top-level individual_checks key)
+      liveliness: checks.liveliness,
+    },
+  };
+}
+
+export function getApiConfig() {
+  const apiBase = (process.env.KYC_API_BASE_URL || "").replace(/\/$/, "");
+  const appId = (process.env.KYC_APP_ID || "").trim();
+  const frontendUrl = (
+    process.env.KYC_FRONTEND_URL || "http://localhost:8009"
+  ).replace(/\/$/, "");
+  // Used only for iframe embeds. Defaults to local Expo web (no X-Frame-Options DENY).
+  const inlineFrontendUrl = (
+    process.env.KYC_INLINE_FRONTEND_URL || "http://localhost:8009"
+  ).replace(/\/$/, "");
+  const defaultCallback =
+    process.env.KYC_DEFAULT_CALLBACK_URL || "https://webhook.site/test-callback";
+
+  return { apiBase, appId, frontendUrl, inlineFrontendUrl, defaultCallback };
+}
+
+function networkErrorMessage(apiBase: string, err: unknown) {
+  const error = err instanceof Error ? err : new Error(String(err));
+  const cause = error.cause;
+  let detail = error.message;
+  if (cause instanceof Error && cause.message) {
+    detail = `${detail}: ${cause.message}`;
+  } else if (cause && typeof cause === "object" && "code" in cause) {
+    detail = `${detail}: ${String((cause as { code?: string }).code)}`;
+  }
+  return `Cannot reach KYC API at ${apiBase} (${detail}). Check KYC_API_BASE_URL / network.`;
+}
+
+async function postJson(url: string, body: unknown) {
+  return fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function createKycSession(input: GenerateLinkRequest) {
+  const { apiBase, appId: envAppId, frontendUrl, defaultCallback } = getApiConfig();
+  const appId = (input.app_id || envAppId || "").trim();
+
+  if (!apiBase) {
+    throw new Error("KYC_API_BASE_URL is not configured");
+  }
+  if (!appId) {
+    throw new Error(
+      "KYC_APP_ID is not configured. Set a production Apps ObjectId in .env.local or the form.",
+    );
+  }
+  if (!/^[a-fA-F0-9]{24}$/.test(appId)) {
+    throw new Error(
+      "KYC_APP_ID must be a 24-character Mongo ObjectId from the production apps collection.",
+    );
+  }
+
+  const userRef =
+    (input.user_ref || "").trim() ||
+    `portal-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  const branding = {
+    brand_name: input.branding.brand_name.trim(),
+    brand_logo: input.branding.brand_logo.trim(),
+    bg_color: input.branding.bg_color,
+    text_color: input.branding.text_color,
+    button_color: input.branding.button_color,
+  };
+
+  const userRes = await postJson(`${apiBase}/user`, {
+    email: input.email.trim().toLowerCase(),
+    phone: input.phone.trim(),
+    user_ref: userRef,
+    app: appId,
+    country: input.country,
+    branding,
+  }).catch((err) => {
+    throw new Error(networkErrorMessage(apiBase, err));
+  });
+
+  const userBody = await userRes.json().catch(() => ({}));
+  if (!userRes.ok) {
+    throw new Error(extractErrorMessage(userBody, `Failed to create user (${userRes.status})`));
+  }
+
+  const customerId = userBody.customer_id;
+  if (!customerId) {
+    throw new Error("Backend did not return customer_id");
+  }
+
+  const verificationRes = await postJson(`${apiBase}/verification`, {
+    customer_id: customerId,
+    country: input.country,
+    callback: (input.callback || defaultCallback).trim(),
+    redirect: `${frontendUrl}/success`,
+    individual_checks: buildIndividualChecks(input.checks),
+    branding,
+  }).catch((err) => {
+    throw new Error(networkErrorMessage(apiBase, err));
+  });
+
+  const verificationBody = await verificationRes.json().catch(() => ({}));
+  if (!verificationRes.ok) {
+    throw new Error(
+      extractErrorMessage(
+        verificationBody,
+        `Failed to create verification (${verificationRes.status})`,
+      ),
+    );
+  }
+
+  return {
+    customer_id: customerId,
+    verification_id: verificationBody.verification_id,
+    verification_url: verificationBody.verification_url,
+    reference: verificationBody.reference || "",
+    todo: verificationBody.todo || [],
+    total_checks: verificationBody.total_checks || 0,
+  };
+}
+
+export async function fetchVerificationStatus(verificationId: string) {
+  const { apiBase } = getApiConfig();
+  if (!apiBase) {
+    throw new Error("KYC_API_BASE_URL is not configured");
+  }
+
+  const res = await fetch(`${apiBase}/status/${verificationId}`, {
+    cache: "no-store",
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(
+      body?.message || body?.error || `Status fetch failed (${res.status})`,
+    );
+  }
+  return body;
+}
