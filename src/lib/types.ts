@@ -31,6 +31,7 @@ export interface GenerateLinkRequest {
   email: string;
   phone: string;
   country: CountryCode;
+  full_name?: string;
   app_id?: string;
   user_ref?: string;
   callback?: string;

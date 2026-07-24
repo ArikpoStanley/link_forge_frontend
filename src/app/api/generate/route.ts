@@ -45,6 +45,7 @@ export async function POST(request: Request) {
       email,
       phone,
       country,
+      full_name: body.full_name ? String(body.full_name).trim() : undefined,
       app_id: body.app_id ? String(body.app_id).trim() : undefined,
       user_ref: body.user_ref ? String(body.user_ref) : undefined,
       callback: body.callback ? String(body.callback) : undefined,

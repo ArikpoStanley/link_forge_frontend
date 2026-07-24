@@ -21,7 +21,13 @@ function extractErrorMessage(body: unknown, fallback: string) {
   if (Array.isArray(errors) && errors.length > 0) {
     const first = errors[0] as Record<string, unknown>;
     const msg = first?.msg || first?.message;
-    if (typeof msg === "string" && msg.trim()) return msg;
+    if (typeof msg === "string" && msg.trim()) {
+      const path =
+        typeof first.path === "string" && first.path.trim()
+          ? first.path.trim()
+          : "";
+      return path ? `${path}: ${msg}` : msg;
+    }
   }
   if (errors && typeof errors === "object") {
     const values = Object.values(errors as Record<string, unknown>);
@@ -31,11 +37,26 @@ function extractErrorMessage(body: unknown, fallback: string) {
   return fallback;
 }
 
+/** Prod Joi requires brand_logo to be a real URI or empty — drop invalid values. */
+export function sanitizeBrandLogo(logo: string) {
+  const trimmed = logo.trim();
+  if (!trimmed) return "";
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return "";
+    return trimmed;
+  } catch {
+    return "";
+  }
+}
+
 export function buildIndividualChecks(checks: CheckSelection) {
+  // Only send enabled top-level flags. `document_verification` must stay at
+  // individual_checks root (not under verification_types) — prod Joi rejects it there.
   return {
-    bio: checks.bio,
-    document_verification: checks.document_verification,
-    disclaimer: checks.disclaimer,
+    bio: checks.bio || undefined,
+    document_verification: checks.document_verification || undefined,
+    disclaimer: checks.disclaimer || undefined,
     address_verification: checks.address_verification
       ? { enabled: true, upload_proof_of_address: true }
       : undefined,
@@ -86,6 +107,29 @@ async function postJson(url: string, body: unknown) {
   });
 }
 
+/** Split "Ada Augusta Lovelace" → first / middle / last for Modular user + bio prefill. */
+export function splitFullName(fullName: string) {
+  const parts = fullName
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (parts.length === 0) {
+    return { first_name: "", middle_name: "", last_name: "" };
+  }
+  if (parts.length === 1) {
+    return { first_name: parts[0], middle_name: "", last_name: "" };
+  }
+  if (parts.length === 2) {
+    return { first_name: parts[0], middle_name: "", last_name: parts[1] };
+  }
+  return {
+    first_name: parts[0],
+    middle_name: parts.slice(1, -1).join(" "),
+    last_name: parts[parts.length - 1],
+  };
+}
+
 export async function createKycSession(input: GenerateLinkRequest) {
   const { apiBase, appId: envAppId, frontendUrl, defaultCallback } = getApiConfig();
   const appId = (input.app_id || envAppId || "").trim();
@@ -110,24 +154,60 @@ export async function createKycSession(input: GenerateLinkRequest) {
 
   const branding = {
     brand_name: input.branding.brand_name.trim(),
-    brand_logo: input.branding.brand_logo.trim(),
+    brand_logo: sanitizeBrandLogo(input.branding.brand_logo),
     bg_color: input.branding.bg_color,
     text_color: input.branding.text_color,
     button_color: input.branding.button_color,
   };
 
-  const userRes = await postJson(`${apiBase}/user`, {
+  const nameParts = splitFullName(input.full_name || "");
+  const hasName =
+    Boolean(nameParts.first_name) ||
+    Boolean(nameParts.last_name) ||
+    Boolean(nameParts.middle_name);
+
+  const baseUserPayload: Record<string, unknown> = {
     email: input.email.trim().toLowerCase(),
     phone: input.phone.trim(),
     user_ref: userRef,
     app: appId,
     country: input.country,
     branding,
-  }).catch((err) => {
-    throw new Error(networkErrorMessage(apiBase, err));
-  });
+  };
 
-  const userBody = await userRes.json().catch(() => ({}));
+  const namedUserPayload = hasName
+    ? {
+        ...baseUserPayload,
+        ...(nameParts.first_name ? { first_name: nameParts.first_name } : {}),
+        ...(nameParts.last_name ? { last_name: nameParts.last_name } : {}),
+        ...(nameParts.middle_name
+          ? { middle_name: nameParts.middle_name }
+          : {}),
+      }
+    : baseUserPayload;
+
+  let userRes = await postJson(`${apiBase}/user`, namedUserPayload).catch(
+    (err) => {
+      throw new Error(networkErrorMessage(apiBase, err));
+    },
+  );
+
+  let userBody = await userRes.json().catch(() => ({}));
+
+  // Older prod builds reject name fields — retry without so link generation still works
+  if (
+    !userRes.ok &&
+    hasName &&
+    /first_name|last_name|middle_name|not allowed/i.test(
+      extractErrorMessage(userBody, ""),
+    )
+  ) {
+    userRes = await postJson(`${apiBase}/user`, baseUserPayload).catch((err) => {
+      throw new Error(networkErrorMessage(apiBase, err));
+    });
+    userBody = await userRes.json().catch(() => ({}));
+  }
+
   if (!userRes.ok) {
     throw new Error(extractErrorMessage(userBody, `Failed to create user (${userRes.status})`));
   }

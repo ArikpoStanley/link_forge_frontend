@@ -36,6 +36,7 @@ const DEFAULT_CHECKS: CheckSelection = {
 };
 
 export default function GenerateForm() {
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("demo@sentz.test");
   const [phone, setPhone] = useState(`${DEFAULT_DIAL}8012345678`);
   const [country, setCountry] = useState(DEFAULT_COUNTRY);
@@ -112,6 +113,20 @@ export default function GenerateForm() {
       return;
     }
 
+    const logo = brandLogo.trim();
+    if (logo) {
+      try {
+        const parsed = new URL(logo);
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+          setError("Brand logo must be an http(s) URL, or leave it blank.");
+          return;
+        }
+      } catch {
+        setError("Brand logo must be a full URL (e.g. https://…), or leave it blank.");
+        return;
+      }
+    }
+
     setError(null);
     setLoading(true);
 
@@ -123,11 +138,12 @@ export default function GenerateForm() {
           email: trimmedEmail,
           phone: trimmedPhone,
           country,
+          full_name: fullName.trim() || undefined,
           app_id: appId.trim(),
           callback: callback.trim() || undefined,
           branding: {
             brand_name: brandName,
-            brand_logo: brandLogo.trim(),
+            brand_logo: logo,
             bg_color: bgColor,
             text_color: textColor,
             button_color: buttonColor,
@@ -208,6 +224,22 @@ export default function GenerateForm() {
                 />
                 <span className="block text-[11px] text-[var(--ink-muted)]">
                   API: {apiBase || "…"} · local backend
+                </span>
+              </label>
+              <label className="block space-y-1.5 sm:col-span-2">
+                <span className="text-[10px] uppercase tracking-[0.16em] text-[var(--ink-muted)]">
+                  Full name
+                </span>
+                <input
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="e.g. Ada Augusta Lovelace"
+                  className="field field-compact"
+                  autoComplete="name"
+                />
+                <span className="block text-[11px] text-[var(--ink-muted)]">
+                  Prefills Bio data (first / middle / last) when provided.
                 </span>
               </label>
               <label className="block space-y-1.5">
