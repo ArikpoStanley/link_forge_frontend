@@ -44,7 +44,7 @@ export default function GenerateForm() {
   const [appId, setAppId] = useState("");
   const [apiBase, setApiBase] = useState("");
   const [inlineFrontendUrl, setInlineFrontendUrl] = useState(
-    "http://localhost:8009",
+    "https://transid2.fuspay.finance",
   );
   const [brandName, setBrandName] = useState("Acme Pay");
   const [brandLogo, setBrandLogo] = useState("");

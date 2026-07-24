@@ -43,6 +43,14 @@ export default function LinkResult({
           Session created for {brandName}. Stay here and verify in a modal, or
           open the hosted verification link when you are ready.
         </p>
+        {result.name_prefill_warning ? (
+          <p
+            role="alert"
+            className="mt-4 max-w-xl rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+          >
+            {result.name_prefill_warning}
+          </p>
+        ) : null}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">

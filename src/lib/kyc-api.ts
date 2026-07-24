@@ -75,11 +75,11 @@ export function getApiConfig() {
   const apiBase = (process.env.KYC_API_BASE_URL || "").replace(/\/$/, "");
   const appId = (process.env.KYC_APP_ID || "").trim();
   const frontendUrl = (
-    process.env.KYC_FRONTEND_URL || "http://localhost:8009"
+    process.env.KYC_FRONTEND_URL || "https://transid2.fuspay.finance"
   ).replace(/\/$/, "");
-  // Used only for iframe embeds. Defaults to local Expo web (no X-Frame-Options DENY).
+  // Inline iframe host — defaults to the same hosted Modular UI
   const inlineFrontendUrl = (
-    process.env.KYC_INLINE_FRONTEND_URL || "http://localhost:8009"
+    process.env.KYC_INLINE_FRONTEND_URL || frontendUrl
   ).replace(/\/$/, "");
   const defaultCallback =
     process.env.KYC_DEFAULT_CALLBACK_URL || "https://webhook.site/test-callback";
@@ -193,6 +193,8 @@ export async function createKycSession(input: GenerateLinkRequest) {
   );
 
   let userBody = await userRes.json().catch(() => ({}));
+  let namePrefillSaved = hasName;
+  let namePrefillWarning: string | undefined;
 
   // Older prod builds reject name fields — retry without so link generation still works
   if (
@@ -202,6 +204,9 @@ export async function createKycSession(input: GenerateLinkRequest) {
       extractErrorMessage(userBody, ""),
     )
   ) {
+    namePrefillSaved = false;
+    namePrefillWarning =
+      "Full name was not saved — production KYC_Verif does not accept name fields yet. Deploy KYC_Verif, then generate a new link with Full name filled.";
     userRes = await postJson(`${apiBase}/user`, baseUserPayload).catch((err) => {
       throw new Error(networkErrorMessage(apiBase, err));
     });
@@ -245,6 +250,8 @@ export async function createKycSession(input: GenerateLinkRequest) {
     reference: verificationBody.reference || "",
     todo: verificationBody.todo || [],
     total_checks: verificationBody.total_checks || 0,
+    name_prefill: namePrefillSaved,
+    name_prefill_warning: namePrefillWarning,
   };
 }
 

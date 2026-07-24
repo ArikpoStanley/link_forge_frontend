@@ -40,17 +40,6 @@ function buildEmbedUrl(
   }
 }
 
-function hostBlocksEmbedding(url: string) {
-  try {
-    const host = new URL(url).hostname;
-    return (
-      host === "transid2.fuspay.finance" || host.endsWith(".fuspay.finance")
-    );
-  } catch {
-    return false;
-  }
-}
-
 export default function KycModal({
   open,
   verificationId,
@@ -69,10 +58,7 @@ export default function KycModal({
     [verificationUrl, verificationId, inlineFrontendUrl],
   );
 
-  const canEmbed = useMemo(() => {
-    if (inlineFrontendUrl) return true;
-    return !hostBlocksEmbedding(verificationUrl);
-  }, [inlineFrontendUrl, verificationUrl]);
+  const canEmbed = true;
 
   const handleReady = useCallback(() => {
     setInitialized(true);

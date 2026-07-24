@@ -46,6 +46,9 @@ export interface GenerateLinkResponse {
   reference: string;
   todo: string[];
   total_checks: number;
+  /** True when Full name was sent and stored on the Modular user for Bio prefill. */
+  name_prefill?: boolean;
+  name_prefill_warning?: string;
 }
 
 export interface VerificationStatusResponse {
