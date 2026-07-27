@@ -115,16 +115,13 @@ export default function KycModal({
 
       {/* Width matches Fuspay Modular KYC checkout column (500px) */}
       <div
-        className="relative flex max-h-[min(92vh,860px)] w-full flex-col overflow-hidden rounded-2xl bg-white shadow-[0_30px_80px_rgba(0,0,0,0.35)]"
+        className="relative flex h-[min(92vh,860px)] w-full flex-col overflow-hidden rounded-2xl bg-white shadow-[0_30px_80px_rgba(0,0,0,0.35)]"
         style={{ maxWidth: CHECKOUT_WIDTH_PX }}
       >
         <header className="flex shrink-0 items-center justify-between border-b border-black/8 px-4 py-2.5">
           <div className="min-w-0">
             <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--ink-muted)]">
               Inline verification
-            </p>
-            <p className="truncate font-[family-name:var(--font-display)] text-base text-[var(--ink)]">
-              {brandName || "KYC"} session
             </p>
           </div>
           <button
@@ -139,7 +136,7 @@ export default function KycModal({
         {/* Checkout UI fills the panel — no side gutters */}
         <div
           className="relative w-full flex-1 bg-white"
-          style={{ minHeight: "min(78vh, 720px)" }}
+          style={{ minHeight: "min(82vh, 780px)" }}
         >
           {!canEmbed && (
             <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 bg-white px-6 text-center">

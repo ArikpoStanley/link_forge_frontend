@@ -1,4 +1,4 @@
-# Linkforge — Modular KYC Link Portal
+# Fuspay TransID — Modular KYC Link Portal
 
 Independent Next.js app for external users to hit the Modular KYC backend, generate a verification link, then either:
 

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Linkforge — Modular KYC",
+  title: "Fuspay TransID — Modular KYC",
   description:
     "Generate Modular KYC verification links and complete checks inline or via hosted URL.",
 };
