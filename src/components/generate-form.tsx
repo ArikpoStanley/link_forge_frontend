@@ -11,6 +11,19 @@ import type { CheckSelection, GenerateLinkResponse } from "@/lib/types";
 const DEFAULT_COUNTRY = "NG";
 const DEFAULT_DIAL = getCountryByCode(DEFAULT_COUNTRY)?.dialCode || "+234";
 
+const NIGERIA_ONLY_CHECKS: (keyof CheckSelection)[] = ["nin", "bvn"];
+const GHANA_ONLY_CHECKS: (keyof CheckSelection)[] = [
+  "quick_address_verification",
+];
+
+function isNigeriaCountry(code: string) {
+  return code.trim().toUpperCase() === "NG";
+}
+
+function isGhanaCountry(code: string) {
+  return code.trim().toUpperCase() === "GH";
+}
+
 const CHECK_OPTIONS: { key: keyof CheckSelection; label: string }[] = [
   { key: "phone", label: "Phone OTP" },
   { key: "email", label: "Email OTP" },
@@ -20,7 +33,11 @@ const CHECK_OPTIONS: { key: keyof CheckSelection; label: string }[] = [
   { key: "liveliness", label: "Liveness" },
   { key: "document_verification", label: "Document" },
   { key: "disclaimer", label: "Disclaimer" },
-  { key: "address_verification", label: "Address" },
+  { key: "address_verification", label: "Address (utility bill upload)" },
+  {
+    key: "quick_address_verification",
+    label: "Quick Address (meter number)",
+  },
 ];
 
 const DEFAULT_CHECKS: CheckSelection = {
@@ -30,17 +47,19 @@ const DEFAULT_CHECKS: CheckSelection = {
   bvn: true,
   bio: true,
   liveliness: true,
-  document_verification: false,
+  document_verification: true,
   disclaimer: true,
-  address_verification: false,
+  address_verification: true,
+  quick_address_verification: false,
 };
 
 export default function GenerateForm() {
   const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("demo@sentz.test");
-  const [phone, setPhone] = useState(`${DEFAULT_DIAL}8012345678`);
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState(DEFAULT_DIAL);
   const [country, setCountry] = useState(DEFAULT_COUNTRY);
   const [callback, setCallback] = useState("");
+  const [redirect, setRedirect] = useState("");
   const [appId, setAppId] = useState("");
   const [apiBase, setApiBase] = useState("");
   const [inlineFrontendUrl, setInlineFrontendUrl] = useState(
@@ -90,7 +109,40 @@ export default function GenerateForm() {
     const nextDial = getCountryByCode(nextCode)?.dialCode || "";
     setCountry(nextCode);
     setPhone((current) => applyDialCode(current, nextDial, prevDial));
+    if (!isNigeriaCountry(nextCode)) {
+      setChecks((prev) => ({
+        ...prev,
+        nin: false,
+        bvn: false,
+      }));
+    }
+    if (!isGhanaCountry(nextCode)) {
+      setChecks((prev) => ({
+        ...prev,
+        quick_address_verification: false,
+      }));
+    }
   };
+
+  const visibleCheckOptions = useMemo(
+    () =>
+      CHECK_OPTIONS.filter((option) => {
+        if (
+          !isNigeriaCountry(country) &&
+          NIGERIA_ONLY_CHECKS.includes(option.key)
+        ) {
+          return false;
+        }
+        if (
+          !isGhanaCountry(country) &&
+          GHANA_ONLY_CHECKS.includes(option.key)
+        ) {
+          return false;
+        }
+        return true;
+      }),
+    [country],
+  );
 
   const generateLink = async () => {
     const trimmedEmail = email.trim();
@@ -127,6 +179,22 @@ export default function GenerateForm() {
       }
     }
 
+    const redirectTrimmed = redirect.trim();
+    if (redirectTrimmed) {
+      try {
+        const parsed = new URL(redirectTrimmed);
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+          setError("Redirect URL must be an http(s) URL, or leave it blank.");
+          return;
+        }
+      } catch {
+        setError(
+          "Redirect URL must be a full URL (e.g. https://your.app/done), or leave it blank.",
+        );
+        return;
+      }
+    }
+
     setError(null);
     setLoading(true);
 
@@ -141,6 +209,7 @@ export default function GenerateForm() {
           full_name: fullName.trim() || undefined,
           app_id: appId.trim(),
           callback: callback.trim() || undefined,
+          redirect: redirectTrimmed || undefined,
           branding: {
             brand_name: brandName,
             brand_logo: logo,
@@ -268,7 +337,7 @@ export default function GenerateForm() {
                   type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder={`${DEFAULT_DIAL}8012345678`}
+                  placeholder={`${DEFAULT_DIAL}… (WhatsApp)`}
                   className="field field-compact"
                 />
               </label>
@@ -284,6 +353,23 @@ export default function GenerateForm() {
                   placeholder="https://your.app/webhooks/kyc"
                   className="field field-compact"
                 />
+              </label>
+              <label className="block space-y-1.5 sm:col-span-2">
+                <span className="text-[10px] uppercase tracking-[0.16em] text-[var(--ink-muted)]">
+                  Redirect URL
+                </span>
+                <input
+                  type="text"
+                  inputMode="url"
+                  value={redirect}
+                  onChange={(e) => setRedirect(e.target.value)}
+                  placeholder="https://your.app/kyc-complete"
+                  className="field field-compact"
+                />
+                <span className="block text-[11px] text-[var(--ink-muted)]">
+                  Customer is sent here after KYC completes. Leave blank to use
+                  the default success page.
+                </span>
               </label>
             </div>
           </section>
@@ -386,12 +472,15 @@ export default function GenerateForm() {
               Checks
             </h2>
             <p className="mt-0.5 text-xs text-[var(--ink-muted)] sm:text-sm">
-              {selectedCount} selected for this session
+              {selectedCount} selected — only these appear in the KYC flow
+              {!isNigeriaCountry(country)
+                ? " (NIN & BVN are Nigeria only)"
+                : ""}
             </p>
           </div>
 
           <div className="flex flex-col gap-1.5">
-            {CHECK_OPTIONS.map((option) => (
+            {visibleCheckOptions.map((option) => (
               <SwitchToggle
                 key={option.key}
                 id={`check-${option.key}`}

@@ -50,24 +50,47 @@ export function sanitizeBrandLogo(logo: string) {
   }
 }
 
-export function buildIndividualChecks(checks: CheckSelection) {
-  // Only send enabled top-level flags. `document_verification` must stay at
-  // individual_checks root (not under verification_types) — prod Joi rejects it there.
+/** Accept only http(s) redirect/callback URLs; return empty string if invalid. */
+export function sanitizeHttpUrl(value: string | undefined | null) {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return "";
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return "";
+    return trimmed;
+  } catch {
+    return "";
+  }
+}
+
+export function buildIndividualChecks(
+  checks: CheckSelection,
+  country?: string,
+) {
+  const code = String(country || "NG").trim().toUpperCase();
+  const isNigeria = code === "NG";
+  const isGhana = code === "GH";
+  // Only what the tenant turned on — modular KYC is selection-driven.
+  const verification_types: Record<string, boolean> = {};
+  if (checks.phone) verification_types.phone = true;
+  if (checks.email) verification_types.email = true;
+  if (isNigeria && checks.nin) verification_types.nin = true;
+  if (isNigeria && checks.bvn) verification_types.bvn = true;
+
   return {
-    bio: checks.bio || undefined,
-    document_verification: checks.document_verification || undefined,
-    disclaimer: checks.disclaimer || undefined,
-    address_verification: checks.address_verification
-      ? { enabled: true, upload_proof_of_address: true }
-      : undefined,
-    verification_types: {
-      phone: checks.phone,
-      email: checks.email,
-      nin: checks.nin,
-      bvn: checks.bvn,
-      // Prod Joi allows liveliness here (not as a top-level individual_checks key)
-      liveliness: checks.liveliness,
-    },
+    ...(checks.bio ? { bio: true } : {}),
+    ...(checks.document_verification ? { document_verification: true } : {}),
+    ...(checks.disclaimer ? { disclaimer: true } : {}),
+    ...(checks.liveliness ? { liveliness: true } : {}),
+    ...(checks.address_verification
+      ? { address_verification: { enabled: true, upload_proof_of_address: true } }
+      : {}),
+    ...(isGhana && checks.quick_address_verification
+      ? { quick_address_verification: true }
+      : {}),
+    ...(Object.keys(verification_types).length
+      ? { verification_types }
+      : {}),
   };
 }
 
@@ -226,8 +249,8 @@ export async function createKycSession(input: GenerateLinkRequest) {
     customer_id: customerId,
     country: input.country,
     callback: (input.callback || defaultCallback).trim(),
-    redirect: `${frontendUrl}/success`,
-    individual_checks: buildIndividualChecks(input.checks),
+    redirect: sanitizeHttpUrl(input.redirect) || `${frontendUrl}/success`,
+    individual_checks: buildIndividualChecks(input.checks, input.country),
     branding,
   }).catch((err) => {
     throw new Error(networkErrorMessage(apiBase, err));

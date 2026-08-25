@@ -6,6 +6,7 @@ interface SwitchToggleProps {
   label: string;
   accentColor?: string;
   id?: string;
+  disabled?: boolean;
 }
 
 export default function SwitchToggle({
@@ -14,13 +15,16 @@ export default function SwitchToggle({
   label,
   accentColor = "#0F766E",
   id,
+  disabled = false,
 }: SwitchToggleProps) {
   const switchId = id || `switch-${label.replace(/\s+/g, "-").toLowerCase()}`;
 
   return (
     <label
       htmlFor={switchId}
-      className="group flex cursor-pointer items-center justify-between gap-3 py-1.5 transition"
+      className={`group flex items-center justify-between gap-3 py-1.5 transition ${
+        disabled ? "cursor-not-allowed opacity-70" : "cursor-pointer"
+      }`}
     >
       <span className="text-sm text-[var(--ink)]">{label}</span>
       <button
@@ -28,9 +32,14 @@ export default function SwitchToggle({
         type="button"
         role="switch"
         aria-checked={checked}
+        aria-disabled={disabled}
+        disabled={disabled}
         aria-label={`${label}: ${checked ? "on" : "off"}`}
-        onClick={() => onChange(!checked)}
-        className="relative h-7 w-12 shrink-0 rounded-full border transition duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+        onClick={() => {
+          if (disabled) return;
+          onChange(!checked);
+        }}
+        className="relative h-7 w-12 shrink-0 rounded-full border transition duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed"
         style={{
           backgroundColor: checked ? accentColor : "rgba(20, 32, 28, 0.12)",
           borderColor: checked ? accentColor : "rgba(20, 32, 28, 0.14)",

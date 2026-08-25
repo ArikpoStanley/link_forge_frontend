@@ -25,6 +25,8 @@ export interface CheckSelection {
   document_verification: boolean;
   disclaimer: boolean;
   address_verification: boolean;
+  /** Prembly Ghana meter number — Quick Address Verification */
+  quick_address_verification: boolean;
 }
 
 export interface GenerateLinkRequest {
@@ -35,6 +37,8 @@ export interface GenerateLinkRequest {
   app_id?: string;
   user_ref?: string;
   callback?: string;
+  /** Where the customer is sent after KYC completes */
+  redirect?: string;
   branding: BrandingInput;
   checks: CheckSelection;
 }

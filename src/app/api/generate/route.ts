@@ -35,10 +35,21 @@ export async function POST(request: Request) {
       bvn: asBool(checksRaw.bvn, true),
       bio: asBool(checksRaw.bio, true),
       liveliness: asBool(checksRaw.liveliness, true),
-      document_verification: asBool(checksRaw.document_verification, false),
+      document_verification: asBool(checksRaw.document_verification, true),
       disclaimer: asBool(checksRaw.disclaimer, true),
-      address_verification: asBool(checksRaw.address_verification, false),
+      address_verification: asBool(checksRaw.address_verification, true),
+      quick_address_verification: asBool(
+        checksRaw.quick_address_verification,
+        false,
+      ),
     };
+
+    if (!Object.values(checks).some(Boolean)) {
+      return NextResponse.json(
+        { message: "Select at least one KYC check" },
+        { status: 400 },
+      );
+    }
 
     const branding = body.branding || {};
     const payload: GenerateLinkRequest = {
@@ -48,7 +59,8 @@ export async function POST(request: Request) {
       full_name: body.full_name ? String(body.full_name).trim() : undefined,
       app_id: body.app_id ? String(body.app_id).trim() : undefined,
       user_ref: body.user_ref ? String(body.user_ref) : undefined,
-      callback: body.callback ? String(body.callback) : undefined,
+      callback: body.callback ? String(body.callback).trim() : undefined,
+      redirect: body.redirect ? String(body.redirect).trim() : undefined,
       branding: {
         brand_name: String(branding.brand_name || "Partner").trim() || "Partner",
         brand_logo: String(branding.brand_logo || "").trim(),
