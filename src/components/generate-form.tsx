@@ -12,7 +12,7 @@ const DEFAULT_COUNTRY = "NG";
 const DEFAULT_DIAL = getCountryByCode(DEFAULT_COUNTRY)?.dialCode || "+234";
 
 const NIGERIA_ONLY_CHECKS: (keyof CheckSelection)[] = ["nin", "bvn"];
-const GHANA_ONLY_CHECKS: (keyof CheckSelection)[] = [
+const QUICK_ADDRESS_CHECKS: (keyof CheckSelection)[] = [
   "quick_address_verification",
 ];
 
@@ -22,6 +22,10 @@ function isNigeriaCountry(code: string) {
 
 function isGhanaCountry(code: string) {
   return code.trim().toUpperCase() === "GH";
+}
+
+function supportsQuickAddress(code: string) {
+  return isNigeriaCountry(code) || isGhanaCountry(code);
 }
 
 const CHECK_OPTIONS: { key: keyof CheckSelection; label: string }[] = [
@@ -36,7 +40,7 @@ const CHECK_OPTIONS: { key: keyof CheckSelection; label: string }[] = [
   { key: "address_verification", label: "Address (utility bill upload)" },
   {
     key: "quick_address_verification",
-    label: "Quick Address (meter number)",
+    label: "Quick Address (meter — GH / NG)",
   },
 ];
 
@@ -116,7 +120,7 @@ export default function GenerateForm() {
         bvn: false,
       }));
     }
-    if (!isGhanaCountry(nextCode)) {
+    if (!supportsQuickAddress(nextCode)) {
       setChecks((prev) => ({
         ...prev,
         quick_address_verification: false,
@@ -134,8 +138,8 @@ export default function GenerateForm() {
           return false;
         }
         if (
-          !isGhanaCountry(country) &&
-          GHANA_ONLY_CHECKS.includes(option.key)
+          QUICK_ADDRESS_CHECKS.includes(option.key) &&
+          !supportsQuickAddress(country)
         ) {
           return false;
         }
@@ -295,7 +299,7 @@ export default function GenerateForm() {
                   API: {apiBase || "…"} · local backend
                 </span>
               </label>
-              <label className="block space-y-1.5 sm:col-span-2">
+              <label className="block space-y-1.5">
                 <span className="text-[10px] uppercase tracking-[0.16em] text-[var(--ink-muted)]">
                   Full name
                 </span>
@@ -307,9 +311,6 @@ export default function GenerateForm() {
                   className="field field-compact"
                   autoComplete="name"
                 />
-                <span className="block text-[11px] text-[var(--ink-muted)]">
-                  Prefills Bio data (first / middle / last) when provided.
-                </span>
               </label>
               <label className="block space-y-1.5">
                 <span className="text-[10px] uppercase tracking-[0.16em] text-[var(--ink-muted)]">
@@ -325,12 +326,6 @@ export default function GenerateForm() {
               </label>
               <label className="block space-y-1.5">
                 <span className="text-[10px] uppercase tracking-[0.16em] text-[var(--ink-muted)]">
-                  Country
-                </span>
-                <CountrySelect value={country} onChange={handleCountryChange} />
-              </label>
-              <label className="block space-y-1.5">
-                <span className="text-[10px] uppercase tracking-[0.16em] text-[var(--ink-muted)]">
                   Phone
                 </span>
                 <input
@@ -340,6 +335,12 @@ export default function GenerateForm() {
                   placeholder={`${DEFAULT_DIAL}… (WhatsApp)`}
                   className="field field-compact"
                 />
+              </label>
+              <label className="block space-y-1.5">
+                <span className="text-[10px] uppercase tracking-[0.16em] text-[var(--ink-muted)]">
+                  Country
+                </span>
+                <CountrySelect value={country} onChange={handleCountryChange} />
               </label>
               <label className="block space-y-1.5">
                 <span className="text-[10px] uppercase tracking-[0.16em] text-[var(--ink-muted)]">
@@ -354,7 +355,7 @@ export default function GenerateForm() {
                   className="field field-compact"
                 />
               </label>
-              <label className="block space-y-1.5 sm:col-span-2">
+              <label className="block space-y-1.5">
                 <span className="text-[10px] uppercase tracking-[0.16em] text-[var(--ink-muted)]">
                   Redirect URL
                 </span>
@@ -366,10 +367,6 @@ export default function GenerateForm() {
                   placeholder="https://your.app/kyc-complete"
                   className="field field-compact"
                 />
-                <span className="block text-[11px] text-[var(--ink-muted)]">
-                  Customer is sent here after KYC completes. Leave blank to use
-                  the default success page.
-                </span>
               </label>
             </div>
           </section>

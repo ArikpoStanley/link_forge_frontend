@@ -25,7 +25,7 @@ export interface CheckSelection {
   document_verification: boolean;
   disclaimer: boolean;
   address_verification: boolean;
-  /** Prembly Ghana meter number — Quick Address Verification */
+  /** Prembly meter number — Quick Address (Ghana + Nigeria) */
   quick_address_verification: boolean;
 }
 

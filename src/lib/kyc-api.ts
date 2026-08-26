@@ -85,7 +85,7 @@ export function buildIndividualChecks(
     ...(checks.address_verification
       ? { address_verification: { enabled: true, upload_proof_of_address: true } }
       : {}),
-    ...(isGhana && checks.quick_address_verification
+    ...((isGhana || isNigeria) && checks.quick_address_verification
       ? { quick_address_verification: true }
       : {}),
     ...(Object.keys(verification_types).length
